@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Мини-чат GPT</title>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500&display=swap" rel="stylesheet">
+<style>
+body {
+  font-family: 'Roboto', sans-serif;
+  background: #1e1e2f;
+  color: #fff;
+  display: flex;
+  justify-content: center;
+  padding: 20px;
+}
+
+#container {
+  width: 500px;
+  background: #2b2b3c;
+  border-radius: 15px;
+  box-shadow: 0 0 15px rgba(0,0,0,0.5);
+  overflow: hidden;
+}
+
+#authSection, #chatSection {
+  padding: 20px;
+}
+
+h2 {text-align:center; margin-bottom:20px;}
+
+input {
+  width: calc(100% - 20px);
+  padding: 10px;
+  margin-bottom: 10px;
+  border-radius: 8px;
+  border: none;
+}
+
+button {
+  padding: 10px 15px;
+  margin-right: 5px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+#chatOutput {
+  width: 100%;
+  height: 350px;
+  background: #1e1e2f;
+  border-radius: 10px;
+  padding: 10px;
+  overflow-y: auto;
+  margin-bottom: 10px;
+  box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
+}
+
+.message-user, .message-gpt {
+  padding: 8px 12px;
+  margin: 5px 0;
+  border-radius: 15px;
+  max-width: 80%;
+  word-wrap: break-word;
+}
+
+.message-user {
+  background: #4e9af1;
+  align-self: flex-end;
+  margin-left: auto;
+}
+
+.message-gpt {
+  background: #6ab04c;
+  align-self: flex-start;
+  margin-right: auto;
+}
+
+#messagesWrapper {
+  display: flex;
+  flex-direction: column;
+}
+
+#clearBtn {
+  background: #e74c3c;
+  color: #fff;
+}
+#sendBtn {background: #4e9af1; color: #fff;}
+#logoutBtn {background: #f1c40f; color: #000;}
+</style>
+</head>
+<body>
+
+<div id="container">
+  <div id="authSection">
+    <h2>Регистрация / Вход</h2>
+    <input type="email" id="emailInput" placeholder="Email"><br>
+    <input type="password" id="passInput" placeholder="Пароль"><br>
+    <button onclick="register()">Регистрация</button>
+    <button onclick="login()">Войти</button>
+    <p id="authMsg"></p>
+  </div>
+
+  <div id="chatSection" style="display:none;">
+    <h2>Мини-чат GPT</h2>
+    <div id="chatOutput">
+      <div id="messagesWrapper"></div>
+    </div>
+    <input type="text" id="chatInput" placeholder="Напиши сообщение">
+    <button id="sendBtn">Отправить</button>
+    <button id="clearBtn" onclick="clearChat()">Очистить</button>
+    <button id="logoutBtn" onclick="logout()">Выйти</button>
+  </div>
+</div>
+
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
+
+<script>
+// 🔹 Firebase конфиг
+const firebaseConfig = {
+  apiKey: "AIzaSyC8lcLregxdwR6GBSrkMqlWoZNdUuU3jdM",
+  authDomain: "chat-ca735.firebaseapp.com",
+  projectId: "chat-ca735",
+  storageBucket: "chat-ca735.appspot.com",
+  messagingSenderId: "407446630782",
+  appId: "1:407446630782:android:db7293a24c6e6445ebc32f"
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+
+// 🔹 Регистрация / Вход
+function register(){
+  const email = document.getElementById("emailInput").value;
+  const pass = document.getElementById("passInput").value;
+  auth.createUserWithEmailAndPassword(email, pass)
+      .then(()=> showChat())
+      .catch(err => document.getElementById("authMsg").innerText = err.message);
+}
+
+function login(){
+  const email = document.getElementById("emailInput").value;
+  const pass = document.getElementById("passInput").value;
+  auth.signInWithEmailAndPassword(email, pass)
+      .then(()=> showChat())
+      .catch(err => document.getElementById("authMsg").innerText = err.message);
+}
+
+function logout(){
+  auth.signOut().then(()=>{
+    document.getElementById("authSection").style.display="block";
+    document.getElementById("chatSection").style.display="none";
+  });
+}
+
+function showChat(){
+  document.getElementById("authSection").style.display="none";
+  document.getElementById("chatSection").style.display="block";
+  loadHistory();
+}
+
+// 🔹 GPT чат через CORS-прокси
+const OPENAI_API_KEY = "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";
+const PROXY_URL = "https://cors-anywhere.herokuapp.com/";
+
+function saveHistory(msg){
+  let history = JSON.parse(localStorage.getItem("chatHistory")||"[]");
+  history.push(msg);
+  localStorage.setItem("chatHistory", JSON.stringify(history));
+}
+
+function loadHistory(){
+  const wrapper = document.getElementById("messagesWrapper");
+  wrapper.innerHTML = "";
+  let history = JSON.parse(localStorage.getItem("chatHistory")||"[]");
+  history.forEach(m=>{
+    let p = document.createElement("p");
+    p.className = m.role;
+    p.innerHTML = `<b>${m.role==="message-user"?"Ты":"GPT"}:</b> ${m.text}`;
+    wrapper.appendChild(p);
+  });
+  const chatOut = document.getElementById("chatOutput");
+  chatOut.scrollTop = chatOut.scrollHeight;
+}
+
+async function sendMessage(){
+  const input = document.getElementById("chatInput");
+  const msg = input.value;
+  if(!msg) return;
+  input.value="";
+  const wrapper = document.getElementById("messagesWrapper");
+  
+  let pUser = document.createElement("p");
+  pUser.className = "message-user";
+  pUser.innerHTML = `<b>Ты:</b> ${msg}`;
+  wrapper.appendChild(pUser);
+  saveHistory({role:"message-user", text:msg});
+
+  const chatOut = document.getElementById("chatOutput");
+  chatOut.scrollTop = chatOut.scrollHeight;
+
+  try {
+    const res = await fetch(PROXY_URL + "https://api.openai.com/v1/chat/completions", {
+      method:"POST",
+      headers:{
+        "Content-Type":"application/json",
+        "Authorization": `Bearer ${OPENAI_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: "gpt-3.5-turbo",
+        messages: [{role:"user", content:msg}]
+      })
+    });
+
+    const data = await res.json();
+    const reply = data.choices[0].message.content;
+    let pGPT = document.createElement("p");
+    pGPT.className = "message-gpt";
+    pGPT.innerHTML = `<b>GPT:</b> ${reply}`;
+    wrapper.appendChild(pGPT);
+    saveHistory({role:"message-gpt", text:reply});
+    chatOut.scrollTop = chatOut.scrollHeight;
+  } catch (e) {
+    let pErr = document.createElement("p");
+    pErr.className = "message-gpt";
+    pErr.innerHTML = "<b>GPT:</b> Ошибка: не удалось получить ответ";
+    wrapper.appendChild(pErr);
+  }
+}
+
+function clearChat(){
+  localStorage.removeItem("chatHistory");
+  document.getElementById("messagesWrapper").innerHTML="";
+}
+
+document.getElementById("sendBtn").addEventListener("click", sendMessage);
+document.getElementById("chatInput").addEventListener("keypress", function(e){
+  if(e.key==="Enter") sendMessage();
+});
+</script>
+
+</body>
+</html>
