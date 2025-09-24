@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Мини-чат GPT с регистрацией</title>
+<style>
+body {font-family:Arial,sans-serif; background:#f0f0f0; padding:20px;}
+#authSection, #chatSection {max-width:500px; margin:auto;}
+#chatOutput {width:100%; height:300px; background:white; padding:10px; overflow:auto; border-radius:5px; margin-bottom:10px;}
+#chatInput {width:70%; padding:10px;}
+#sendBtn, #logoutBtn {padding:10px 15px;}
+.message-user {color:blue;}
+.message-gpt {color:green;}
+</style>
+</head>
+<body>
+
+<div id="authSection">
+  <h2>Регистрация / Вход</h2>
+  <input type="email" id="emailInput" placeholder="Email"><br><br>
+  <input type="password" id="passInput" placeholder="Пароль"><br><br>
+  <button onclick="register()">Регистрация</button>
+  <button onclick="login()">Войти</button>
+  <p id="authMsg"></p>
+</div>
+
+<div id="chatSection" style="display:none;">
+  <h2>Мини-чат GPT</h2>
+  <div id="chatOutput"></div>
+  <input type="text" id="chatInput" placeholder="Напиши сообщение">
+  <button id="sendBtn">Отправить</button>
+  <button id="logoutBtn" onclick="logout()">Выйти</button>
+</div>
+
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
+
+<script>
+// 🔹 Firebase конфиг
+const firebaseConfig = {
+  apiKey: "AIzaSyC8lcLregxdwR6GBSrkMqlWoZNdUuU3jdM",
+  authDomain: "chat-ca735.firebaseapp.com",
+  projectId: "chat-ca735",
+  storageBucket: "chat-ca735.appspot.com",
+  messagingSenderId: "407446630782",
+  appId: "1:407446630782:android:db7293a24c6e6445ebc32f"
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+
+// 🔹 Регистрация / Вход
+function register(){
+  const email = document.getElementById("emailInput").value;
+  const pass = document.getElementById("passInput").value;
+  auth.createUserWithEmailAndPassword(email, pass)
+      .then(()=> showChat())
+      .catch(err => document.getElementById("authMsg").innerText = err.message);
+}
+
+function login(){
+  const email = document.getElementById("emailInput").value;
+  const pass = document.getElementById("passInput").value;
+  auth.signInWithEmailAndPassword(email, pass)
+      .then(()=> showChat())
+      .catch(err => document.getElementById("authMsg").innerText = err.message);
+}
+
+function logout(){
+  auth.signOut().then(()=>{
+    document.getElementById("authSection").style.display="block";
+    document.getElementById("chatSection").style.display="none";
+  });
+}
+
+function showChat(){
+  document.getElementById("authSection").style.display="none";
+  document.getElementById("chatSection").style.display="block";
+  loadHistory();
+}
+
+// 🔹 GPT чат без сервера
+const OPENAI_API_KEY = "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";
+
+function saveHistory(msg){
+  let history = JSON.parse(localStorage.getItem("chatHistory")||"[]");
+  history.push(msg);
+  localStorage.setItem("chatHistory", JSON.stringify(history));
+}
+
+function loadHistory(){
+  const chatOut = document.getElementById("chatOutput");
+  let history = JSON.parse(localStorage.getItem("chatHistory")||"[]");
+  chatOut.innerHTML = "";
+  history.forEach(m=> chatOut.innerHTML += `<p class="${m.role}"><b>${m.role==="message-user"?"Ты":"GPT"}:</b> ${m.text}</p>`);
+  chatOut.scrollTop = chatOut.scrollHeight;
+}
+
+async function sendMessage(){
+  const msg = document.getElementById("chatInput").value;
+  if(!msg) return;
+  document.getElementById("chatInput").value="";
+  const chatOut = document.getElementById("chatOutput");
+  chatOut.innerHTML += `<p class="message-user"><b>Ты:</b> ${msg}</p>`;
+  saveHistory({role:"message-user", text:msg});
+
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method:"POST",
+    headers:{
+      "Content-Type":"application/json",
+      "Authorization": `Bearer ${OPENAI_API_KEY}`
+    },
+    body: JSON.stringify({
+      model: "gpt-3.5-turbo",
+      messages: [{role:"user", content:msg}]
+    })
+  });
+
+  const data = await res.json();
+  const reply = data.choices[0].message.content;
+  chatOut.innerHTML += `<p class="message-gpt"><b>GPT:</b> ${reply}</p>`;
+  saveHistory({role:"message-gpt", text:reply});
+  chatOut.scrollTop = chatOut.scrollHeight;
+}
+
+document.getElementById("sendBtn").addEventListener("click", sendMessage);
+document.getElementById("chatInput").addEventListener("keypress", function(e){
+  if(e.key==="Enter") sendMessage();
+});
+</script>
+
+</body>
+</html>
